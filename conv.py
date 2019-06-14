@@ -1,14 +1,11 @@
 from mysql import connector
-from dateutil.parser import parse
 import argparse
 import operator as op
 from functools import reduce as rd
 import re
-# from pprint import pprint as view
 from transliterate import slugify
 import logging
 from copy import deepcopy
-import datetime
 
 logger = logging.getLogger('loader')
 logger.setLevel(logging.DEBUG)
@@ -344,8 +341,6 @@ def parse_category_params(cursor_in, cursor_out):
         return type(e).__name__, e.args[0]
 
 
-
-
 def create_tmp_products(cursor_in, cursor_out):
     sql_select = """select
                 pmf.pm_ppi_id as ppi_id,
@@ -361,7 +356,6 @@ def create_tmp_products(cursor_in, cursor_out):
                 and pmf.pm_comment = pmod.mod_name
             join ppi_position_import as ppi on
                 ppi.ppi_id = pmf.pm_ppi_id"""
-
 
     sql_create = ("CREATE TABLE IF NOT EXISTS tmp_products \
               (id INT(11) PRIMARY KEY AUTO_INCREMENT NOT NULL,\
@@ -388,9 +382,9 @@ def create_tmp_products(cursor_in, cursor_out):
                               "ppi_name": name_,
                               "pm_mf_id": mf_id_,
                               "ppi_category": category_}
-            #print(row)
-            #print(insert_pattern)
-            #continue
+            # print(row)
+            # print(insert_pattern)
+            # continue
             sql_exec(cursor_out, sql_insert, insert_pattern)
     except Exception as e:
         print(e)
@@ -437,7 +431,6 @@ def wrap_products(cursor_in, cursor_out):
 
 
 def parse_products(cursor_in, cursor_out):
-
 
     sql_select = ("select * from tmp_products_with_map")
 
@@ -717,7 +710,6 @@ def create_tmp_product_params(cursor_in, cursor_out):
         sql_exec(cursor_out, sql_insert, insert_pattern)
 
 
-
 def make_temporary_product_params_with_map(cursor_in, cursor_out):
     sql_mapping = """insert
                 into
@@ -738,7 +730,6 @@ def make_temporary_product_params_with_map(cursor_in, cursor_out):
                         and tpmap.product = tpp.ppi_name
                     join iav_products_map as ipm on
                         ipm.middle_map_id = tpmap.product_id"""
-
 
     sql_create = ("CREATE TABLE IF NOT EXISTS tmp_product_params_with_map "
                   "(id INT(11) PRIMARY KEY AUTO_INCREMENT NOT NULL, "
@@ -768,7 +759,6 @@ def wrap_product_params(cursor_in, cursor_out):
 
 def parse_product_params(cursor_in, cursor_out):
     sql_select = "select * from tmp_product_params_with_map"
-
 
     sql_insert_map = ("insert into iav_product_params_map "
                       "(new_map_id, middle_map_id, "
@@ -801,7 +791,7 @@ def parse_product_params(cursor_in, cursor_out):
             insert_pattern = {"product_id": product_id_,
                               "param_id": param_id_,
                               "some_value": converted}
-                              
+
             try:
                 cursor_out.execute(sql_insert, insert_pattern)
             except connector.Error as err:
