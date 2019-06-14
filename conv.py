@@ -253,9 +253,22 @@ def parse_category(cursor_in, cursor_out):
                         cursor_in.execute(sql_sel_whr, (_pid,))
                     except connector.Error as err:
                         print(err)
-
-                    #new_pid = cursor_in.fetchone()[0]
+                    # new_pid = cursor_in.fetchone()[0]
                     new_pid = tmp_map.get(cursor_in.fetchone()[0], None)
+
+                    raw_title = [_id, _pid]
+                    raw_title = get_category_title(cursor_in,
+                                                   raw_title, _pid)
+                    str_title = ','.join(['%s'] * len(raw_title))
+
+                    sql_get_title = f"""select
+                    group_concat(cat_name separator '/')
+                    as title from categories
+                    where cat_id in ({str_title})"""
+
+                    cursor_in.execute(sql_get_title, tuple(raw_title))
+                    new_title = cursor_in.fetchone()[0]
+                    insert_pattern.update({"category": new_title})
 
                 insert_pattern.update({"parent_id": new_pid})
 
@@ -273,6 +286,22 @@ def parse_category(cursor_in, cursor_out):
                 print(err)
     except Exception as e:
         return type(e).__name__, e.args[0]
+
+
+def get_category_title(cursor_in, raw_title, _pid):
+    sql = """select cat_id, cat_parent_id, cat_level
+             from categories
+             where cat_id = %s"""
+
+    cursor_in.execute(sql, (_pid,))
+    next_id, next_pid, level = cursor_in.fetchone()
+
+    if level <= 2:
+        raw_title.sort()
+        return raw_title
+
+    raw_title.append(next_pid)
+    return get_category_title(cursor_in, raw_title, next_pid)
 
 
 def parse_category_params(cursor_in, cursor_out):
