@@ -19,9 +19,10 @@ config = {
     "output": {
         "host": "localhost",
         "user": "root",
-        "db_name": "agrodb",
+        "db_name": "agro",
     },
     "password": "",
+    "currency_id": 1,
 }
 
 
@@ -412,7 +413,7 @@ def make_temporary_prod_with_map(cursor_in, cursor_out):
                   "product VARCHAR(255) NOT NULL, "
                   "manufacturer_id INT(11), "
                   "category_id INT(11), "
-                  "correct BOOLEAN "
+                  "correct BOOLEAN, "
                   "INDEX (product_old_id), INDEX (manufacturer_id), "
                   "INDEX (category_id), INDEX (correct))")
     try:
@@ -505,8 +506,6 @@ def create_tmp_prices(cursor_in, cursor_out):
                 pmf.pm_price,
                 pmf.pm_comment,
                 concat(ppi.ppi_name, ', ', pmf.pm_comment, ': ', pmod.mod_name, ' - ', pmod.mod_id) as ppi_name,
-                '_ _',
-                '_') as ppi_name,
                 pd.dl_id,
                 ppi.ppi_category
             from
@@ -630,7 +629,7 @@ def parse_prices(cursor_in, cursor_out):
             insert_pattern = {"price": float(price_),
                               "price_options": opt_,
                               "product_id": product_id_,
-                              "currency_id": 26,
+                              "currency_id": config['currency_id'],
                               "dealer_id": dl_id_}
             try:
                 cursor_out.execute(sql_insert, insert_pattern)
@@ -662,8 +661,6 @@ def create_tmp_product_params(cursor_in, cursor_out):
             join (
                     select pmf.pm_ppi_id as ppi_id,
                     concat(ppi.ppi_name, ', ', pmf.pm_comment, ': ', pmod.mod_name, ' - ', pmod.mod_id) as ppi_name,
-                    '_ _',
-                    '_') as ppi_name,
                     pmod.mod_id
                 from
                     positions_manufacturers as pmf
@@ -829,14 +826,14 @@ def main(args, config):
 
     try:
         parsers = [
-            parse_manufacturers,
-            parse_dealers,
-            parse_category,
-            parse_category_params,
-            wrap_products,
-            parse_products,
-            wrap_prices,
-            parse_prices,
+            # parse_manufacturers,
+            # parse_dealers,
+            # parse_category,
+            # parse_category_params,
+            # wrap_products,
+            # parse_products,
+            # wrap_prices,
+            # parse_prices,
             wrap_product_params,
             parse_product_params,
         ]
