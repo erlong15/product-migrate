@@ -19,9 +19,10 @@ config = {
     "output": {
         "host": "localhost",
         "user": "root",
-        "db_name": "agrodb",
+        "db_name": "agro",
     },
     "password": "",
+    "currency_id": 26,
 }
 
 
@@ -343,19 +344,19 @@ def parse_category_params(cursor_in, cursor_out):
 
 def create_tmp_products(cursor_in, cursor_out):
     sql_select = """select
-                pmf.pm_ppi_id as ppi_id,
-                replace(concat_ws('_', ppi.ppi_name, pmod.mod_name, pmod.mod_id),
-                '_ _',
-                '_') as ppi_name,
-                pmf.pm_mf_id,
-                ppi.ppi_category
-            from
-                positions_manufacturers as pmf
-            join positions_models as pmod on
-                pmod.mod_ppi_id = pmf.pm_ppi_id
-                and pmf.pm_comment = pmod.mod_name
-            join ppi_position_import as ppi on
-                ppi.ppi_id = pmf.pm_ppi_id"""
+                        ppi.ppi_id,
+                        concat(ppi.ppi_name, ', ', pmf.pm_comment, ': ', pmod.mod_name, ' - ', pmod.mod_id) as ppi_name,
+                        pmf.pm_mf_id,
+                        ppi.ppi_category,
+                        if (pmf.pm_comment = pmod.mod_name,
+                        true,
+                        false) as correct
+                    from
+                        ppi_position_import as ppi
+                    join positions_manufacturers as pmf on
+                        pmf.pm_ppi_id = ppi.ppi_id
+                    join positions_models as pmod on
+                        pmf.pm_ppi_id = pmod.mod_ppi_id"""
 
     sql_create = ("CREATE TABLE IF NOT EXISTS tmp_products \
               (id INT(11) PRIMARY KEY AUTO_INCREMENT NOT NULL,\
@@ -363,12 +364,14 @@ def create_tmp_products(cursor_in, cursor_out):
               ppi_name VARCHAR(255) NOT NULL,\
               pm_mf_id INT(11),\
               ppi_category INT(11),\
-              INDEX (ppi_id), INDEX (pm_mf_id), INDEX (ppi_category))")
+              correct BOOLEAN,\
+              INDEX (ppi_id), INDEX (pm_mf_id), INDEX (ppi_category),\
+              INDEX (correct))")
 
     sql_insert = ("insert into tmp_products(ppi_id, ppi_name, "
-                  "pm_mf_id, ppi_category) values "
+                  "pm_mf_id, ppi_category, correct) values "
                   "(%(ppi_id)s, %(ppi_name)s, "
-                  "%(pm_mf_id)s, %(ppi_category)s)")
+                  "%(pm_mf_id)s, %(ppi_category)s, %(correct)s)")
     print('create_tmp_products')
     try:
         cursor_in.execute(sql_select)
@@ -377,11 +380,12 @@ def create_tmp_products(cursor_in, cursor_out):
         sql_exec(cursor_out, sql_create)
 
         for row in request:
-            id_, name_, mf_id_, category_ = row
+            id_, name_, mf_id_, category_, correct_ = row
             insert_pattern = {"ppi_id": id_,
                               "ppi_name": name_,
                               "pm_mf_id": mf_id_,
-                              "ppi_category": category_}
+                              "ppi_category": category_,
+                              "correct": correct_}
             # print(row)
             # print(insert_pattern)
             # continue
@@ -393,11 +397,12 @@ def create_tmp_products(cursor_in, cursor_out):
 
 def make_temporary_prod_with_map(cursor_in, cursor_out):
     sql_mapping = ("insert into tmp_products_with_map (product_old_id, "
-                   "product, manufacturer_id, category_id) "
+                   "product, manufacturer_id, category_id, correct) "
                    "select tprod.ppi_id, tprod.ppi_name as product_name, "
                    "imf.new_map_id as manufacturer_id, "
-                   "icat.new_map_id as category_id from tmp_products as "
-                   "tprod join iav_manufacturers_map as imf "
+                   "icat.new_map_id as category_id, tprod.correct "
+                   "from tmp_products as tprod "
+                   "join iav_manufacturers_map as imf "
                    "on imf.old_map_id = tprod.pm_mf_id join "
                    "iav_categories_map as icat "
                    "on icat.old_map_id = tprod.ppi_category")
@@ -408,8 +413,9 @@ def make_temporary_prod_with_map(cursor_in, cursor_out):
                   "product VARCHAR(255) NOT NULL, "
                   "manufacturer_id INT(11), "
                   "category_id INT(11), "
+                  "correct BOOLEAN, "
                   "INDEX (product_old_id), INDEX (manufacturer_id), "
-                  "INDEX (category_id) )")
+                  "INDEX (category_id), INDEX (correct))")
     try:
         cursor_out.execute(sql_create)
 
@@ -450,7 +456,7 @@ def parse_products(cursor_in, cursor_out):
         request = cursor_out.fetchall()
 
         for row in request:
-            mid_id_, id_, pname_, mf_id_, cat_id_ = row
+            mid_id_, id_, pname_, mf_id_, cat_id_, _ = row
             insert_pattern = {"product": pname_,
                               "manufacturer_id": mf_id_,
                               "category_id": cat_id_,
@@ -499,9 +505,7 @@ def create_tmp_prices(cursor_in, cursor_out):
                 pmf.pm_mf_id,
                 pmf.pm_price,
                 pmf.pm_comment,
-                replace(concat_ws('_', ppi.ppi_name, pmod.mod_name, pmod.mod_id),
-                '_ _',
-                '_') as ppi_name,
+                concat(ppi.ppi_name, ', ', pmf.pm_comment, ': ', pmod.mod_name, ' - ', pmod.mod_id) as ppi_name,
                 pd.dl_id,
                 ppi.ppi_category
             from
@@ -625,7 +629,7 @@ def parse_prices(cursor_in, cursor_out):
             insert_pattern = {"price": float(price_),
                               "price_options": opt_,
                               "product_id": product_id_,
-                              "currency_id": 26,
+                              "currency_id": config['currency_id'],
                               "dealer_id": dl_id_}
             try:
                 cursor_out.execute(sql_insert, insert_pattern)
@@ -656,9 +660,7 @@ def create_tmp_product_params(cursor_in, cursor_out):
                 technical_details as td
             join (
                     select pmf.pm_ppi_id as ppi_id,
-                    replace(concat_ws('_', ppi.ppi_name, pmod.mod_name, pmod.mod_id),
-                    '_ _',
-                    '_') as ppi_name,
+                    concat(ppi.ppi_name, ', ', pmf.pm_comment, ': ', pmod.mod_name, ' - ', pmod.mod_id) as ppi_name,
                     pmod.mod_id
                 from
                     positions_manufacturers as pmf
@@ -824,14 +826,14 @@ def main(args, config):
 
     try:
         parsers = [
-            parse_manufacturers,
-            parse_dealers,
-            parse_category,
-            parse_category_params,
-            wrap_products,
-            parse_products,
-            wrap_prices,
-            parse_prices,
+            # parse_manufacturers,
+            # parse_dealers,
+            # parse_category,
+            # parse_category_params,
+            # wrap_products,
+            # parse_products,
+            # wrap_prices,
+            # parse_prices,
             wrap_product_params,
             parse_product_params,
         ]
