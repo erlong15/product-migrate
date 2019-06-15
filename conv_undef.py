@@ -22,7 +22,7 @@ config = {
         "db_name": "agro",
     },
     "password": "",
-    "currency_id": 1,
+    "currency_id": 26,
 }
 
 
